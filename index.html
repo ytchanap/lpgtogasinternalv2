@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>瓶改管经济成本测算</title>
+    <style>
+        body {font-family: 'Microsoft YaHei', Arial; max-width: 800px; margin: 20px auto; padding: 20px}
+        .container {background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05)}
+        h2 {color: #1e293b; border-bottom: 2px solid #3b82f6; padding-bottom: 12px; margin-bottom: 20px}
+        .input-group {margin: 18px 0}
+        label {display: inline-block; width: 300px; font-weight: 500; color: #475569}
+        input {width: 180px; padding: 8px; border: 2px solid #cbd5e1; border-radius: 6px; float: right; transition: 0.3s}
+        input:focus {border-color: #3b82f6; outline: none}
+        button {background: #3b82f6; color: white; padding: 12px 28px; border: none; border-radius: 6px; cursor: pointer; transition: 0.3s; float: right; font-weight: 500}
+        button:hover {background: #2563eb}
+        .result {margin-top: 30px; padding: 25px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08)}
+        .result h3 {color: #3b82f6; margin-top: 0; font-size: 20px}
+        .result-item {margin: 15px 0; font-size: 16px; padding: 12px; border-radius: 6px}
+        .positive {background: #dcfce7; color: #166534}
+        .negative {background: #fee2e2; color: #991b1b}
+        .highlight {font-size: 20px; font-weight: bold; border: 2px solid #3b82f6; background: #eff6ff} /* 突出显示样式 */
+        .unit {color: #64748b; font-size: 0.9em}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>瓶改管经济成本测算工具</h2>
+        
+        <div class="input-group">
+            <label>液化气月用量（瓶/月）<span class="unit">（每瓶50kg）</span>:</label>
+            <input type="number" id="lpgAmount" step="1" min="1" required>
+        </div>
+        <div class="input-group">
+            <label>液化气单价（元/瓶）<span class="unit">（当前市场价格）</span>:</label>
+            <input type="number" id="lpgPrice" step="1" min="1" required>
+        </div>
+        <div class="input-group">
+            <label>天然气价格（元/m³）<span class="unit">（含所有费用）</span>:</label>
+            <input type="number" id="ngPrice" step="0.1" min="0.1" required>
+        </div>
+        <div class="input-group">
+            <label>改造工程投资（元）<span class="unit">（初装费、设备费）</span>:</label>
+            <input type="number" id="ngInvestment" step="1000" min="0" required>
+        </div>
+        
+        <button onclick="calculate()">开始测算</button>
+        
+        <div class="result">
+            <h3>测算结果分析</h3>
+            <!-- 每月节约成本放在第一行，并添加highlight类 -->
+            <div class="result-item highlight" id="savingLine">
+                💰 每月节约成本: <strong><span id="saving">-</span></strong> 元
+            </div>
+            <div class="result-item positive">
+                🏺 液化气月成本: <strong><span id="lpgCost">-</span></strong> 元
+            </div>
+            <div class="result-item positive">
+                🔥 天然气月成本: <strong><span id="ngCost">-</span></strong> 元
+            </div>
+            <div class="result-item" id="rateLine">
+                📊 成本节约率: <strong><span id="savingRate">-</span>%</strong>
+            </div>
+            <div class="result-item" id="paybackLine">
+                ⏳ 投资回本期: <strong><span id="payback">-</span></strong>
+            </div>
+            <div class="result-item positive">
+                🌳 年减碳效果 ≈ 种植 <strong><span id="trees">-</span></strong> 棵树
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function calculate() {
+            // 输入验证
+            const inputs = document.querySelectorAll('input[required]');
+            let isValid = true;
+            inputs.forEach(input => {
+                input.style.borderColor = '#cbd5e1';
+                if (!input.value || parseFloat(input.value) < input.min) {
+                    isValid = false;
+                    input.style.borderColor = '#ef4444';
+                }
+            });
+            if (!isValid) return alert("请填写所有有效数值（必须大于0）");
+
+            // 获取输入值
+            const lpgBottles = parseFloat(document.getElementById('lpgAmount').value);
+            const lpgPrice = parseFloat(document.getElementById('lpgPrice').value);
+            const ngPrice = parseFloat(document.getElementById('ngPrice').value);
+            const ngInvestment = parseFloat(document.getElementById('ngInvestment').value);
+
+            // 基础常数
+            const LPG_ENERGY = 45;     // MJ/kg
+            const NG_ENERGY = 36;      // MJ/m³
+            const LPG_EFFICIENCY = 0.85;
+            const NG_EFFICIENCY = 0.91;
+            const LPG_KG_PER_BOTTLE = 50;
+            const CO2_PER_TREE = 18;   // 每棵树年吸收量18kg
+
+            // 热值换算计算
+            const effectiveLpgEnergy = lpgBottles * LPG_KG_PER_BOTTLE * LPG_ENERGY * LPG_EFFICIENCY;
+            const requiredNgVolume = effectiveLpgEnergy / (NG_ENERGY * NG_EFFICIENCY);
+
+            // 成本计算
+            const lpgMonthlyCost = lpgBottles * lpgPrice;
+            const ngMonthlyCost = Math.round(requiredNgVolume * ngPrice);
+            const monthlySaving = lpgMonthlyCost - ngMonthlyCost;
+            const savingRate = monthlySaving > 0 ? 
+                Math.round((monthlySaving / lpgMonthlyCost) * 100) : 
+                Math.round((monthlySaving / ngMonthlyCost) * 100);
+
+            // 回本期计算
+            let paybackPeriod = '∞';
+            if (monthlySaving > 0) {
+                const totalMonths = ngInvestment / monthlySaving;
+                const years = Math.floor(totalMonths / 12);
+                const months = Math.ceil(totalMonths % 12);
+                paybackPeriod = years > 0 ? `${years}年${months}月` : `${months}月`;
+            }
+
+            // 减碳计算
+            const CO2_LPG = 3.1013;   // kg CO2/kg液化气
+            const CO2_NG = 1.9643;    // kg CO2/m³天然气
+            const annualCarbonKg = (
+                (lpgBottles * LPG_KG_PER_BOTTLE * CO2_LPG) - 
+                (requiredNgVolume * CO2_NG)
+            ) * 12;  // 千克/年
+            const trees = Math.max(Math.round(annualCarbonKg / CO2_PER_TREE), 0);
+
+            // 显示结果
+            document.getElementById('lpgCost').textContent = lpgMonthlyCost.toLocaleString('zh-CN');
+            document.getElementById('ngCost').textContent = ngMonthlyCost.toLocaleString('zh-CN');
+            document.getElementById('saving').textContent = Math.abs(monthlySaving).toLocaleString('zh-CN');
+            document.getElementById('savingRate').textContent = Math.abs(savingRate);
+            document.getElementById('payback').textContent = paybackPeriod;
+            document.getElementById('trees').textContent = trees;
+
+            // 动态样式设置
+            const setStyle = (element, value) => {
+                element.className = `result-item ${value >= 0 ? 'positive' : 'negative'}`;
+            }
+            // 节约金额行保留highlight类，但叠加正负颜色（如果highlight覆盖了背景色，需要调整）
+            document.getElementById('savingLine').className = `result-item highlight ${monthlySaving >= 0 ? 'positive' : 'negative'}`;
+            setStyle(document.getElementById('rateLine'), savingRate);
+            document.getElementById('paybackLine').className = 
+                `result-item ${paybackPeriod !== '∞' ? 'positive' : 'negative'}`;
+        }
+    </script>
+</body>
+</html>
